@@ -1,0 +1,7 @@
+{
+  "name": "Copy of StyleSense AI",
+  "description": "A lightweight Generative AI-powered fashion recommendation system that provides personalized outfit suggestions and styling tips based on your preferences and wardrobe items.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
