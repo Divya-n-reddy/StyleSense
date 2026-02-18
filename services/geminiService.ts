@@ -9,7 +9,13 @@ const extractJSON = (text: string) => {
     if (match && match[1]) {
       return JSON.parse(match[1].trim());
     }
-    throw new Error("Could not parse AI response as JSON.");
+    // Final fallback: try to find first { and last }
+    const startIdx = text.indexOf('{');
+    const endIdx = text.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1) {
+      return JSON.parse(text.substring(startIdx, endIdx + 1));
+    }
+    throw new Error("Could not parse AI response. The model may have reached its limit.");
   }
 };
 
@@ -23,14 +29,18 @@ export const getOutfitRecommendations = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const paletteContext = userPalette 
-    ? `User Palette: ${userPalette.season}. Suit: ${userPalette.bestColors.join(', ')}. Avoid: ${userPalette.avoidColors.join(', ')}.`
+    ? `The user's color season is ${userPalette.season}. Recommend colors like ${userPalette.bestColors.join(', ')}. Avoid ${userPalette.avoidColors.join(', ')}.`
     : "";
 
-  const prompt = `Act as a luxury fashion stylist. 
-    Task: Suggest 3 outfits for ${occasion} in ${vibe} style (Budget: ${budget}).
+  const prompt = `Act as a senior fashion stylist. 
+    Create 3 head-to-toe outfits for the following:
+    Occasion: ${occasion}
+    Vibe: ${vibe}
+    Budget: ${budget}
     ${paletteContext}
-    ${base64Image ? "The user provided an image of an item; integrate it into the outfits." : ""}
-    Output ONLY valid JSON.`;
+    ${base64Image ? "Integrate the specific clothing item provided in the image into these outfits." : ""}
+    
+    Response must be a strict JSON object following the schema provided. No conversational text outside JSON.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -72,14 +82,14 @@ export const getOutfitRecommendations = async (
     });
     return extractJSON(response.text || "{}");
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Stylist API Error:", error);
     throw error;
   }
 };
 
 export const analyzePersonalColor = async (base64Image: string): Promise<PersonalColor> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Perform a seasonal color analysis on this user portrait. Output JSON.`;
+  const prompt = `Perform a professional seasonal color analysis. Analyze skin undertone and eye depth to determine if they are Spring, Summer, Autumn, or Winter. Provide a reasoning and list colors.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -118,12 +128,12 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
   let aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4";
 
   if (type === 'outfit') {
-    prompt = `Professional fashion model wearing: ${description}. High-end editorial style.`;
+    prompt = `Professional high-end editorial fashion photography of a model wearing: ${description}. Soft studio lighting, minimalist background.`;
   } else if (type === 'moodboard') {
-    prompt = `Fashion trend moodboard: ${description}. Magazine layout.`;
+    prompt = `Aesthetic fashion moodboard for the trend: ${description}. Magazine layout style.`;
     aspectRatio = "16:9";
   } else {
-    prompt = `Minimalist color swatch grid for ${description}.`;
+    prompt = `Elegant graphic color swatch for ${description}.`;
     aspectRatio = "1:1";
   }
 
@@ -139,8 +149,6 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
     }
     return null;
   } catch (error) {
-    // If it's a 429, we log it and return null so the UI can handle missing images gracefully
-    console.warn("Image generation limit reached (429)");
     throw error; 
   }
 };
@@ -150,7 +158,7 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: "List 4 current fashion trends for 2024. Return JSON.",
+      contents: "Identify 4 current fashion trends for the current season. Focus on silhouettes and color palettes. Return JSON.",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -169,6 +177,6 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
     });
     return extractJSON(response.text || "[]");
   } catch (error) {
-    return [];
+    throw error;
   }
 };
