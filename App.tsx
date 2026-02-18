@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Occasion, BudgetRange, StyleVibe, StyleAnalysisResult, TrendItem, SavedOutfit, OutfitRecommendation, PersonalColor } from './types';
 import { getOutfitRecommendations, generateFashionImage, getSeasonalTrends, analyzePersonalColor } from './services/geminiService';
@@ -15,6 +14,7 @@ const App: React.FC = () => {
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StyleAnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   const [userPalette, setUserPalette] = useState<PersonalColor | null>(null);
   const [loadingLab, setLoadingLab] = useState(false);
@@ -33,6 +33,11 @@ const App: React.FC = () => {
     
     const storedPalette = localStorage.getItem('stylesense_palette');
     if (storedPalette) setUserPalette(JSON.parse(storedPalette));
+
+    // Initial API Key Check
+    if (!process.env.API_KEY) {
+      setError("API Key not found. Please set your API_KEY in the environment variables.");
+    }
   }, []);
 
   useEffect(() => {
@@ -41,6 +46,7 @@ const App: React.FC = () => {
 
   const fetchTrends = async () => {
     setLoadingTrends(true);
+    setError(null);
     try {
       const data = await getSeasonalTrends();
       setTrends(data);
@@ -52,7 +58,12 @@ const App: React.FC = () => {
           return up;
         });
       });
-    } catch (e) { console.error(e); } finally { setLoadingTrends(false); }
+    } catch (e: any) { 
+      console.error(e); 
+      setError("Failed to fetch trends. Check your API key and network.");
+    } finally { 
+      setLoadingTrends(false); 
+    }
   };
 
   const handleLabAnalysis = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,13 +74,19 @@ const App: React.FC = () => {
         const base64 = reader.result as string;
         setLabImage(base64);
         setLoadingLab(true);
+        setError(null);
         try {
           const analysis = await analyzePersonalColor(base64.split(',')[1]);
           const paletteUrl = await generateFashionImage(`${analysis.season} ${analysis.undertone} Palette`, 'palette');
           const finalAnalysis = { ...analysis, paletteImageUrl: paletteUrl || undefined };
           setUserPalette(finalAnalysis);
           localStorage.setItem('stylesense_palette', JSON.stringify(finalAnalysis));
-        } catch (e) { console.error(e); } finally { setLoadingLab(false); }
+        } catch (e: any) { 
+          console.error(e); 
+          setError("Color analysis failed. Please try a different photo.");
+        } finally { 
+          setLoadingLab(false); 
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -77,20 +94,32 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     setLoading(true);
+    setError(null);
     try {
       const base64Data = image ? image.split(',')[1] : undefined;
       const data = await getOutfitRecommendations(occasion, budget, vibe, base64Data, userPalette || undefined);
       setResult(data);
+      
+      // Attempt to generate images for each recommendation
       data.recommendations.forEach(async (outfit, index) => {
-        const url = await generateFashionImage(`${outfit.name}: ${outfit.description}`);
-        if (url) setResult(prev => {
-          if (!prev) return null;
-          const recs = [...prev.recommendations];
-          recs[index] = { ...recs[index], imageUrl: url };
-          return { ...prev, recommendations: recs };
-        });
+        try {
+          const url = await generateFashionImage(`${outfit.name}: ${outfit.description}`);
+          if (url) setResult(prev => {
+            if (!prev) return null;
+            const recs = [...prev.recommendations];
+            recs[index] = { ...recs[index], imageUrl: url };
+            return { ...prev, recommendations: recs };
+          });
+        } catch (imgError) {
+          console.error("Image generation failed for recommendation", index, imgError);
+        }
       });
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e: any) { 
+      console.error(e); 
+      setError("Stylist generation failed. This might be due to an invalid API key or service limit.");
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSaveOutfit = (outfit: OutfitRecommendation) => {
@@ -107,6 +136,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20 selection:bg-amber-200">
+      {error && (
+        <div className="bg-red-500 text-white text-center py-2 px-4 text-sm font-medium sticky top-0 z-[100] animate-in slide-in-from-top duration-300 flex items-center justify-center gap-4">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="hover:opacity-75">✕</button>
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 py-4">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('stylist')}>
