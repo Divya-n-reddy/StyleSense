@@ -1,5 +1,42 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { StyleAnalysisResult, Occasion, BudgetRange, StyleVibe, TrendItem, PersonalColor } from "../types";
+
+// Mock data for Demo Mode
+const MOCK_RECOMMENDATIONS: StyleAnalysisResult = {
+  vibeSummary: "A sophisticated blend of modern tailoring and effortless grace, perfect for a curated wardrobe.",
+  recommendations: [
+    {
+      id: "demo-1",
+      name: "The Urban Architect",
+      description: "A structured look featuring a charcoal blazer paired with tapered trousers and a silk camisole.",
+      keyItems: ["Structured Charcoal Blazer", "Tapered Wool Trousers", "Silk Camisole"],
+      accessories: ["Geometric Gold Earrings", "Leather Loafers", "Minimalist Tote"],
+      stylingTip: "Roll up the blazer sleeves slightly to reveal a contrasting lining for an effortless touch.",
+      seasonalContext: "Perfect for transitional Autumn weather."
+    },
+    {
+      id: "demo-2",
+      name: "Midnight Minimalist",
+      description: "A sleek, all-black ensemble that plays with textures: matte leather meets soft cashmere.",
+      keyItems: ["Cashmere Mock-neck", "Vegan Leather Skirt", "Oversized Wool Coat"],
+      accessories: ["Silver Chain Belt", "Chelsea Boots", "Statement Watch"],
+      stylingTip: "Mix matte and shiny black fabrics to add depth to a monochromatic palette.",
+      seasonalContext: "Ideal for evening events in Winter."
+    },
+    {
+      id: "demo-3",
+      name: "Solstice Linen",
+      description: "Breathable neutrals focusing on relaxed silhouettes and natural fibers.",
+      keyItems: ["Linen Wide-leg Pants", "Cropped Cotton Vest", "Sandals"],
+      accessories: ["Straw Boater Hat", "Woven Bag", "Tortoise Shell Shades"],
+      stylingTip: "Keep the color palette within three shades of beige for a high-end resort look.",
+      seasonalContext: "Best suited for high Summer heat."
+    }
+  ]
+};
+
+const isDemoMode = !process.env.API_KEY || process.env.API_KEY === "undefined" || process.env.API_KEY === "";
 
 export const getOutfitRecommendations = async (
   occasion: Occasion,
@@ -8,8 +45,12 @@ export const getOutfitRecommendations = async (
   base64Image?: string,
   userPalette?: PersonalColor
 ): Promise<StyleAnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (isDemoMode) {
+    console.info("StyleSense: Running in Demo Mode (No API Key detected)");
+    return new Promise((resolve) => setTimeout(() => resolve(MOCK_RECOMMENDATIONS), 1200));
+  }
 
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const paletteContext = userPalette 
     ? `The user's color season is ${userPalette.season}. Recommend colors like ${userPalette.bestColors.join(', ')}. Avoid ${userPalette.avoidColors.join(', ')}.`
     : "";
@@ -68,11 +109,21 @@ export const getOutfitRecommendations = async (
     return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Stylist API Error:", error);
-    throw error;
+    return MOCK_RECOMMENDATIONS; // Fail gracefully to mock data
   }
 };
 
 export const analyzePersonalColor = async (base64Image: string): Promise<PersonalColor> => {
+  if (isDemoMode) {
+    return {
+      season: "Autumn",
+      undertone: "Warm",
+      bestColors: ["Rust", "Olive Green", "Mustard Yellow", "Cream"],
+      avoidColors: ["Hot Pink", "Electric Blue", "Pure White"],
+      description: "You have warm, rich undertones that harmonize beautifully with earth tones and spiced shades."
+    };
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `Perform a seasonal color analysis on this portrait. Determine if the user is Spring, Summer, Autumn, or Winter based on skin undertone and contrast. Provide reasoning.`;
 
@@ -109,6 +160,8 @@ export const analyzePersonalColor = async (base64Image: string): Promise<Persona
 };
 
 export const generateFashionImage = async (description: string, type: 'outfit' | 'moodboard' | 'palette' = 'outfit'): Promise<string | null> => {
+  if (isDemoMode) return null; // Image generation usually requires a real key
+  
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   let prompt = "";
   let aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4";
@@ -141,6 +194,15 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
 };
 
 export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
+  if (isDemoMode) {
+    return [
+      { title: "Quiet Luxury", description: "Minimalist pieces with premium fabrics.", context: "Global Trend" },
+      { title: "Eclectic Grandpa", description: "Vintage knits and loafers.", context: "Street Style" },
+      { title: "Corporate Siren", description: "Sharp office-wear with a feminine edge.", context: "Workwear" },
+      { title: "Red Accents", description: "A pop of cherry red in every look.", context: "Color Trend" }
+    ];
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
