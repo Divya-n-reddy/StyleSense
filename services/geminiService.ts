@@ -9,7 +9,7 @@ const extractJSON = (text: string) => {
     if (match && match[1]) {
       return JSON.parse(match[1].trim());
     }
-    throw e;
+    throw new Error("Could not parse AI response as JSON.");
   }
 };
 
@@ -23,19 +23,18 @@ export const getOutfitRecommendations = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const paletteContext = userPalette 
-    ? `Color Season: ${userPalette.season}. Best Colors: ${userPalette.bestColors.join(', ')}.`
+    ? `User Palette: ${userPalette.season}. Suit: ${userPalette.bestColors.join(', ')}. Avoid: ${userPalette.avoidColors.join(', ')}.`
     : "";
 
-  const prompt = `Stylist Mode:
-    Occasion: ${occasion}
-    Style: ${vibe}
-    Budget: ${budget}
+  const prompt = `Act as a luxury fashion stylist. 
+    Task: Suggest 3 outfits for ${occasion} in ${vibe} style (Budget: ${budget}).
     ${paletteContext}
-    Generate 3 detailed outfits. Return JSON format.`;
+    ${base64Image ? "The user provided an image of an item; integrate it into the outfits." : ""}
+    Output ONLY valid JSON.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3-flash-preview',
       contents: base64Image 
         ? { 
             parts: [
@@ -80,11 +79,11 @@ export const getOutfitRecommendations = async (
 
 export const analyzePersonalColor = async (base64Image: string): Promise<PersonalColor> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Analyze seasonal color palette: Undertone, Season, best/avoid colors.`;
+  const prompt = `Perform a seasonal color analysis on this user portrait. Output JSON.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
@@ -119,12 +118,12 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
   let aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4";
 
   if (type === 'outfit') {
-    prompt = `Editorial fashion shoot, high detail: ${description}. Professional studio lighting.`;
+    prompt = `Professional fashion model wearing: ${description}. High-end editorial style.`;
   } else if (type === 'moodboard') {
-    prompt = `Aesthetic moodboard: ${description}. High fashion magazine style.`;
+    prompt = `Fashion trend moodboard: ${description}. Magazine layout.`;
     aspectRatio = "16:9";
   } else {
-    prompt = `Abstract color palette visualization for ${description}. Minimalist swatches.`;
+    prompt = `Minimalist color swatch grid for ${description}.`;
     aspectRatio = "1:1";
   }
 
@@ -140,8 +139,9 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
     }
     return null;
   } catch (error) {
-    console.error("Image generation failed", error);
-    throw error; // Rethrow to let App.tsx handle throttling
+    // If it's a 429, we log it and return null so the UI can handle missing images gracefully
+    console.warn("Image generation limit reached (429)");
+    throw error; 
   }
 };
 
@@ -149,8 +149,8 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-flash-latest',
-      contents: "List 4 fashion trends today. JSON output.",
+      model: 'gemini-3-flash-preview',
+      contents: "List 4 current fashion trends for 2024. Return JSON.",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
