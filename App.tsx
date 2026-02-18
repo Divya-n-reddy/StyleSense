@@ -35,8 +35,8 @@ const App: React.FC = () => {
     if (storedPalette) setUserPalette(JSON.parse(storedPalette));
 
     // Initial API Key Check
-    if (!process.env.API_KEY) {
-      setError("API Key not found. Please set your API_KEY in the environment variables.");
+    if (!process.env.API_KEY || process.env.API_KEY === "") {
+      setError("API Key missing! Please add 'API_KEY' to your Vercel Environment Variables.");
     }
   }, []);
 
@@ -60,7 +60,7 @@ const App: React.FC = () => {
       });
     } catch (e: any) { 
       console.error(e); 
-      setError("Failed to fetch trends. Check your API key and network.");
+      setError(`Trend fetch failed: ${e.message || "Unknown error"}`);
     } finally { 
       setLoadingTrends(false); 
     }
@@ -83,7 +83,7 @@ const App: React.FC = () => {
           localStorage.setItem('stylesense_palette', JSON.stringify(finalAnalysis));
         } catch (e: any) { 
           console.error(e); 
-          setError("Color analysis failed. Please try a different photo.");
+          setError(`Analysis error: ${e.message || "Please try a clearer selfie."}`);
         } finally { 
           setLoadingLab(false); 
         }
@@ -111,12 +111,12 @@ const App: React.FC = () => {
             return { ...prev, recommendations: recs };
           });
         } catch (imgError) {
-          console.error("Image generation failed for recommendation", index, imgError);
+          console.error("Image generation failed", imgError);
         }
       });
     } catch (e: any) { 
       console.error(e); 
-      setError("Stylist generation failed. This might be due to an invalid API key or service limit.");
+      setError(`Stylist error: ${e.message || "Generation failed. Please check your API key."}`);
     } finally { 
       setLoading(false); 
     }
@@ -137,9 +137,9 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen pb-20 selection:bg-amber-200">
       {error && (
-        <div className="bg-red-500 text-white text-center py-2 px-4 text-sm font-medium sticky top-0 z-[100] animate-in slide-in-from-top duration-300 flex items-center justify-center gap-4">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="hover:opacity-75">✕</button>
+        <div className="bg-red-600 text-white text-center py-3 px-4 text-sm font-bold sticky top-0 z-[100] shadow-lg flex items-center justify-center gap-4">
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="bg-white/20 hover:bg-white/40 px-2 py-1 rounded">Dismiss</button>
         </div>
       )}
 
@@ -152,10 +152,10 @@ const App: React.FC = () => {
             <h1 className="text-xl font-serif font-bold tracking-tight">StyleSense</h1>
           </div>
           <nav className="flex gap-4 md:gap-8 text-xs md:text-sm font-medium text-gray-400">
-            <button onClick={() => setActiveTab('stylist')} className={`${activeTab === 'stylist' ? 'text-black' : 'hover:text-black'}`}>Stylist</button>
-            <button onClick={() => setActiveTab('lab')} className={`${activeTab === 'lab' ? 'text-amber-600' : 'hover:text-black'}`}>Palette Lab ✨</button>
-            <button onClick={() => setActiveTab('wardrobe')} className={`${activeTab === 'wardrobe' ? 'text-black' : 'hover:text-black'}`}>Wardrobe</button>
-            <button onClick={() => setActiveTab('trends')} className={`${activeTab === 'trends' ? 'text-black' : 'hover:text-black'}`}>Trends</button>
+            <button onClick={() => setActiveTab('stylist')} className={`${activeTab === 'stylist' ? 'text-black font-bold' : 'hover:text-black'}`}>Stylist</button>
+            <button onClick={() => setActiveTab('lab')} className={`${activeTab === 'lab' ? 'text-amber-600 font-bold' : 'hover:text-black'}`}>Palette Lab ✨</button>
+            <button onClick={() => setActiveTab('wardrobe')} className={`${activeTab === 'wardrobe' ? 'text-black font-bold' : 'hover:text-black'}`}>Wardrobe</button>
+            <button onClick={() => setActiveTab('trends')} className={`${activeTab === 'trends' ? 'text-black font-bold' : 'hover:text-black'}`}>Trends</button>
           </nav>
         </div>
       </header>
@@ -165,7 +165,7 @@ const App: React.FC = () => {
           <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="text-center space-y-4">
               <h2 className="text-5xl font-serif font-bold">The Palette Lab</h2>
-              <p className="text-gray-500 max-w-xl mx-auto text-lg">Our AI analyzes your skin, hair, and eye tones to reveal your perfect seasonal color palette.</p>
+              <p className="text-gray-500 max-w-xl mx-auto text-lg">Our AI analyzes your features to reveal your perfect seasonal color palette.</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -181,8 +181,7 @@ const App: React.FC = () => {
                 {loadingLab && (
                   <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-white p-8 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mb-4"></div>
-                    <p className="font-bold">Analyzing Undertones...</p>
-                    <p className="text-xs mt-2 opacity-80">We're checking your contrast levels and skin temperature.</p>
+                    <p className="font-bold">Analyzing Your Colors...</p>
                   </div>
                 )}
                 <input type="file" ref={labInputRef} onChange={handleLabAnalysis} className="hidden" accept="image/*" />
@@ -198,10 +197,6 @@ const App: React.FC = () => {
                         <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Undertone</p>
                         <p className="font-bold">{userPalette.undertone}</p>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-2xl flex-1">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Contrast</p>
-                        <p className="font-bold">{userPalette.season === 'Winter' || userPalette.season === 'Autumn' ? 'High' : 'Low/Medium'}</p>
-                      </div>
                     </div>
                     <p className="text-gray-600 leading-relaxed italic">"{userPalette.description}"</p>
                     <div className="space-y-2">
@@ -210,39 +205,26 @@ const App: React.FC = () => {
                          {userPalette.bestColors.map(c => <span key={c} className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium">{c}</span>)}
                        </div>
                     </div>
-                    <Button onClick={() => setActiveTab('stylist')} className="w-full">Apply Palette to Stylist</Button>
-                    <Button variant="outline" onClick={() => {setUserPalette(null); setLabImage(null);}} className="w-full">Reset Analysis</Button>
+                    <Button onClick={() => setActiveTab('stylist')} className="w-full">Use This Palette</Button>
+                    <Button variant="outline" onClick={() => {setUserPalette(null); setLabImage(null);}} className="w-full">Reset</Button>
                   </div>
                 ) : (
                   <div className="space-y-6 text-gray-500">
-                    <p className="text-lg leading-relaxed">By identifying your season, we can filter out colors that wash you out and highlight those that make you shine.</p>
+                    <p className="text-lg leading-relaxed">Discover which colors make you look radiant and which ones to avoid.</p>
                     <ul className="space-y-4">
                       <li className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xs">01</span>
-                        <span>Upload a well-lit portrait.</span>
+                        <span>Upload a selfie in natural light.</span>
                       </li>
                       <li className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-full bg-pink-50 text-pink-500 flex items-center justify-center text-xs">02</span>
-                        <span>Our AI detects micro-pigmentation patterns.</span>
-                      </li>
-                      <li className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center text-xs">03</span>
-                        <span>Get your personalized shopping palette.</span>
+                        <span>AI detects skin and hair tones.</span>
                       </li>
                     </ul>
                   </div>
                 )}
               </div>
             </div>
-            
-            {userPalette?.paletteImageUrl && (
-              <div className="pt-12 border-t border-gray-100">
-                 <p className="text-center font-serif text-2xl mb-8">Your Curated Digital Swatches</p>
-                 <div className="rounded-[2.5rem] overflow-hidden shadow-xl aspect-square md:aspect-[2/1] bg-gray-50">
-                   <img src={userPalette.paletteImageUrl} className="w-full h-full object-cover" alt="Palette Visualization" />
-                 </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -252,9 +234,9 @@ const App: React.FC = () => {
               <div className="mb-12 p-4 bg-amber-50/50 border border-amber-100 rounded-2xl flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-xl">🎨</span>
-                  <p className="text-sm font-medium text-amber-900">Styling for your <span className="font-bold">{userPalette.season}</span> palette.</p>
+                  <p className="text-sm font-medium text-amber-900">Styling for <span className="font-bold">{userPalette.season}</span> colors.</p>
                 </div>
-                <button onClick={() => setActiveTab('lab')} className="text-xs font-bold text-amber-600 hover:underline">Change</button>
+                <button onClick={() => setActiveTab('lab')} className="text-xs font-bold text-amber-600 hover:underline">Change Palette</button>
               </div>
             )}
 
@@ -262,7 +244,7 @@ const App: React.FC = () => {
               <div className="grid lg:grid-cols-2 gap-12 items-start">
                 <div className="space-y-6">
                   <h2 className="text-5xl lg:text-7xl font-serif font-semibold leading-[1.1] text-gray-900">Unlock your <br /><span className="text-amber-600 italic">Signature</span> Look.</h2>
-                  <p className="text-lg text-gray-500 max-w-md leading-relaxed">AI-powered styling recommendations designed for your life and your unique color palette.</p>
+                  <p className="text-lg text-gray-500 max-w-md leading-relaxed">AI-powered styling recommendations designed specifically for you.</p>
                   <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 space-y-6 mt-8">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
@@ -291,12 +273,12 @@ const App: React.FC = () => {
                   {image ? (
                     <>
                       <img src={image} alt="Uploaded" className="absolute inset-0 w-full h-full object-cover" />
-                      <button onClick={() => setImage(null)} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full">✕</button>
+                      <button onClick={() => setImage(null)} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full z-10">✕</button>
                     </>
                   ) : (
                     <div className="text-center space-y-4">
                       <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">📸</div>
-                      <p className="text-gray-500">Upload a piece you want to style</p>
+                      <p className="text-gray-500">Upload a piece to style (optional)</p>
                       <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Select Photo</Button>
                       <input type="file" ref={fileInputRef} onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -332,13 +314,13 @@ const App: React.FC = () => {
         {activeTab === 'wardrobe' && (
           <div className="space-y-8">
              <div className="text-center space-y-4">
-                <h2 className="text-5xl font-serif font-bold">Digital Lookbook</h2>
-                <p className="text-gray-500">Your curated collection of AI styles.</p>
+                <h2 className="text-5xl font-serif font-bold">Lookbook</h2>
+                <p className="text-gray-500">Your saved outfit inspirations.</p>
              </div>
              {savedOutfits.length === 0 ? (
                <div className="bg-white border-2 border-dashed border-gray-200 rounded-[2rem] p-20 text-center">
-                  <p className="text-gray-400">Your wardrobe is empty.</p>
-                  <Button onClick={() => setActiveTab('stylist')} className="mt-4">Get Styling</Button>
+                  <p className="text-gray-400">No outfits saved yet.</p>
+                  <Button onClick={() => setActiveTab('stylist')} className="mt-4">Find New Styles</Button>
                </div>
              ) : (
                <div className="grid md:grid-cols-3 gap-8">
@@ -363,13 +345,13 @@ const App: React.FC = () => {
              ) : (
                <div className="grid md:grid-cols-2 gap-8">
                  {trends.map((trend, i) => (
-                   <div key={i} className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden group hover:shadow-2xl transition-all duration-500">
+                   <div key={i} className="bg-white border border-gray-100 rounded-[2rem] overflow-hidden">
                       <div className="h-48 bg-gray-50 relative overflow-hidden">
-                        {trend.trendImageUrl && <img src={trend.trendImageUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="" />}
+                        {trend.trendImageUrl && <img src={trend.trendImageUrl} className="w-full h-full object-cover" alt="" />}
                       </div>
                       <div className="p-8">
-                        <h3 className="text-2xl font-serif font-bold text-gray-900 mb-3">{trend.title}</h3>
-                        <p className="text-gray-600 text-sm leading-relaxed mb-4">{trend.description}</p>
+                        <h3 className="text-2xl font-serif font-bold text-gray-900 mb-2">{trend.title}</h3>
+                        <p className="text-gray-600 text-sm mb-4">{trend.description}</p>
                         <div className="text-xs font-bold uppercase text-amber-600 bg-amber-50 px-3 py-1 rounded-full w-fit">{trend.context}</div>
                       </div>
                    </div>
