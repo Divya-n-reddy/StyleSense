@@ -36,7 +36,11 @@ const MOCK_RECOMMENDATIONS: StyleAnalysisResult = {
   ]
 };
 
-const isDemoMode = !process.env.API_KEY || process.env.API_KEY === "undefined" || process.env.API_KEY === "";
+const getApiKey = () => {
+  const key = process.env.API_KEY;
+  if (!key || key === "undefined" || key === "null" || key.trim() === "") return null;
+  return key;
+};
 
 export const getOutfitRecommendations = async (
   occasion: Occasion,
@@ -45,12 +49,14 @@ export const getOutfitRecommendations = async (
   base64Image?: string,
   userPalette?: PersonalColor
 ): Promise<StyleAnalysisResult> => {
-  if (isDemoMode) {
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
     console.info("StyleSense: Running in Demo Mode (No API Key detected)");
     return new Promise((resolve) => setTimeout(() => resolve(MOCK_RECOMMENDATIONS), 1200));
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   const paletteContext = userPalette 
     ? `The user's color season is ${userPalette.season}. Recommend colors like ${userPalette.bestColors.join(', ')}. Avoid ${userPalette.avoidColors.join(', ')}.`
     : "";
@@ -109,12 +115,13 @@ export const getOutfitRecommendations = async (
     return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Stylist API Error:", error);
-    return MOCK_RECOMMENDATIONS; // Fail gracefully to mock data
+    return MOCK_RECOMMENDATIONS;
   }
 };
 
 export const analyzePersonalColor = async (base64Image: string): Promise<PersonalColor> => {
-  if (isDemoMode) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     return {
       season: "Autumn",
       undertone: "Warm",
@@ -124,7 +131,7 @@ export const analyzePersonalColor = async (base64Image: string): Promise<Persona
     };
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   const prompt = `Perform a seasonal color analysis on this portrait. Determine if the user is Spring, Summer, Autumn, or Winter based on skin undertone and contrast. Provide reasoning.`;
 
   try {
@@ -160,9 +167,10 @@ export const analyzePersonalColor = async (base64Image: string): Promise<Persona
 };
 
 export const generateFashionImage = async (description: string, type: 'outfit' | 'moodboard' | 'palette' = 'outfit'): Promise<string | null> => {
-  if (isDemoMode) return null; // Image generation usually requires a real key
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
   
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   let prompt = "";
   let aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4";
 
@@ -194,7 +202,8 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
 };
 
 export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
-  if (isDemoMode) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     return [
       { title: "Quiet Luxury", description: "Minimalist pieces with premium fabrics.", context: "Global Trend" },
       { title: "Eclectic Grandpa", description: "Vintage knits and loafers.", context: "Street Style" },
@@ -203,7 +212,7 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
     ];
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',

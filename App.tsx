@@ -36,9 +36,10 @@ const App: React.FC = () => {
     const storedPalette = localStorage.getItem('stylesense_palette');
     if (storedPalette) setUserPalette(JSON.parse(storedPalette));
 
-    // Determine if we are in demo mode
-    const hasApiKey = !!process.env.API_KEY && process.env.API_KEY !== "" && process.env.API_KEY !== "undefined";
-    setIsDemo(!hasApiKey);
+    // Robust API key detection for UI state
+    const key = process.env.API_KEY;
+    const hasKey = key && key !== "undefined" && key !== "null" && key.trim() !== "";
+    setIsDemo(!hasKey);
   }, []);
 
   const parseError = (e: any): string => {
