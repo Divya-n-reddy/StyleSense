@@ -1,23 +1,5 @@
-import { GoogleGenAI, Type, GenerateContentParameters } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { StyleAnalysisResult, Occasion, BudgetRange, StyleVibe, TrendItem, PersonalColor } from "../types";
-
-const extractJSON = (text: string) => {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (match && match[1]) {
-      return JSON.parse(match[1].trim());
-    }
-    // Final fallback: try to find first { and last }
-    const startIdx = text.indexOf('{');
-    const endIdx = text.lastIndexOf('}');
-    if (startIdx !== -1 && endIdx !== -1) {
-      return JSON.parse(text.substring(startIdx, endIdx + 1));
-    }
-    throw new Error("Could not parse AI response. The model may have reached its limit.");
-  }
-};
 
 export const getOutfitRecommendations = async (
   occasion: Occasion,
@@ -33,14 +15,16 @@ export const getOutfitRecommendations = async (
     : "";
 
   const prompt = `Act as a senior fashion stylist. 
-    Create 3 head-to-toe outfits for the following:
+    Create 3 distinct, high-end outfit recommendations for:
     Occasion: ${occasion}
     Vibe: ${vibe}
-    Budget: ${budget}
+    Budget Context: ${budget}
     ${paletteContext}
-    ${base64Image ? "Integrate the specific clothing item provided in the image into these outfits." : ""}
+    ${base64Image ? "Integrate the clothing item from the attached image into these looks." : "Create complete fresh looks."}
     
-    Response must be a strict JSON object following the schema provided. No conversational text outside JSON.`;
+    Return a JSON object with:
+    - recommendations: Array of 3 outfits (name, description, keyItems[], accessories[], stylingTip, seasonalContext)
+    - vibeSummary: A short, 1-2 sentence atmospheric summary of the overall style direction.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -80,7 +64,8 @@ export const getOutfitRecommendations = async (
         }
       }
     });
-    return extractJSON(response.text || "{}");
+    
+    return JSON.parse(response.text || "{}");
   } catch (error) {
     console.error("Stylist API Error:", error);
     throw error;
@@ -89,7 +74,7 @@ export const getOutfitRecommendations = async (
 
 export const analyzePersonalColor = async (base64Image: string): Promise<PersonalColor> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Perform a professional seasonal color analysis. Analyze skin undertone and eye depth to determine if they are Spring, Summer, Autumn, or Winter. Provide a reasoning and list colors.`;
+  const prompt = `Perform a seasonal color analysis on this portrait. Determine if the user is Spring, Summer, Autumn, or Winter based on skin undertone and contrast. Provide reasoning.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -116,8 +101,9 @@ export const analyzePersonalColor = async (base64Image: string): Promise<Persona
       }
     });
 
-    return extractJSON(response.text || "{}");
+    return JSON.parse(response.text || "{}");
   } catch (error) {
+    console.error("Lab Analysis Error:", error);
     throw error;
   }
 };
@@ -128,12 +114,12 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
   let aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4";
 
   if (type === 'outfit') {
-    prompt = `Professional high-end editorial fashion photography of a model wearing: ${description}. Soft studio lighting, minimalist background.`;
+    prompt = `Editorial fashion photography, high-end magazine style. Model wearing: ${description}. Neutral chic background, soft daylight.`;
   } else if (type === 'moodboard') {
-    prompt = `Aesthetic fashion moodboard for the trend: ${description}. Magazine layout style.`;
+    prompt = `Aesthetic fashion collage moodboard for ${description}. High fashion magazine layout.`;
     aspectRatio = "16:9";
   } else {
-    prompt = `Elegant graphic color swatch for ${description}.`;
+    prompt = `Minimalist luxury color palette swatch for ${description}, artistic layout.`;
     aspectRatio = "1:1";
   }
 
@@ -149,7 +135,8 @@ export const generateFashionImage = async (description: string, type: 'outfit' |
     }
     return null;
   } catch (error) {
-    throw error; 
+    console.warn("Image generation failed:", error);
+    return null;
   }
 };
 
@@ -158,7 +145,7 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: "Identify 4 current fashion trends for the current season. Focus on silhouettes and color palettes. Return JSON.",
+      contents: "List 4 top fashion trends for the current real-world season. Return JSON format.",
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -175,8 +162,9 @@ export const getSeasonalTrends = async (): Promise<TrendItem[]> => {
         }
       }
     });
-    return extractJSON(response.text || "[]");
+    return JSON.parse(response.text || "[]");
   } catch (error) {
+    console.error("Trends Error:", error);
     throw error;
   }
 };
