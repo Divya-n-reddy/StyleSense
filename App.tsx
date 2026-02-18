@@ -6,6 +6,7 @@ import { Button } from './components/Button';
 import { OutfitCard } from './components/OutfitCard';
 
 type Tab = 'stylist' | 'wardrobe' | 'trends' | 'lab';
+type ApiStatus = 'loading' | 'active' | 'demo' | 'invalid';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('stylist');
@@ -16,7 +17,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StyleAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
+  const [apiStatus, setApiStatus] = useState<ApiStatus>('loading');
   
   const [userPalette, setUserPalette] = useState<PersonalColor | null>(null);
   const [loadingLab, setLoadingLab] = useState(false);
@@ -36,16 +37,23 @@ const App: React.FC = () => {
     const storedPalette = localStorage.getItem('stylesense_palette');
     if (storedPalette) setUserPalette(JSON.parse(storedPalette));
 
-    // Robust API key detection for UI state
+    // Check for API Key presence
     const key = process.env.API_KEY;
-    const hasKey = key && key !== "undefined" && key !== "null" && key.trim() !== "";
-    setIsDemo(!hasKey);
+    if (key && key !== "undefined" && key !== "null" && key.trim() !== "") {
+      setApiStatus('active');
+    } else {
+      setApiStatus('demo');
+    }
   }, []);
 
   const parseError = (e: any): string => {
     const msg = e?.message || "";
+    if (msg.includes("401") || msg.includes("API_KEY_INVALID")) {
+      setApiStatus('invalid');
+      return "The API Key provided in Vercel is invalid or expired.";
+    }
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
-      return "Rate limit exceeded. Please wait a moment and try again.";
+      return "Rate limit exceeded. Gemini is busy, please wait 60 seconds.";
     }
     return msg || "An unexpected connection error occurred.";
   };
@@ -56,7 +64,7 @@ const App: React.FC = () => {
     try {
       const data = await getSeasonalTrends();
       setTrends(data);
-      if (!isDemo) {
+      if (apiStatus === 'active') {
         for (let i = 0; i < data.length; i++) {
           try {
             const url = await generateFashionImage(data[i].title, 'moodboard');
@@ -113,7 +121,7 @@ const App: React.FC = () => {
       setResult(data);
       setLoading(false);
 
-      if (!isDemo) {
+      if (apiStatus === 'active') {
         for (let i = 0; i < data.recommendations.length; i++) {
           await new Promise(r => setTimeout(r, 2000));
           try {
@@ -150,9 +158,20 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20 selection:bg-amber-100 luxury-gradient">
-      {isDemo && (
+      {/* Dynamic Status Banner */}
+      {apiStatus === 'demo' && (
         <div className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm">
-          StyleSense Preview Mode
+          🏗️ StyleSense Demo Mode (No API Key Detected)
+        </div>
+      )}
+      {apiStatus === 'invalid' && (
+        <div className="bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm">
+          ⚠️ Invalid API Key in Vercel Settings
+        </div>
+      )}
+      {apiStatus === 'active' && (
+        <div className="bg-green-600 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm animate-pulse">
+          ✨ StyleSense AI Connected & Active
         </div>
       )}
 
@@ -172,7 +191,13 @@ const App: React.FC = () => {
             <div className="w-9 h-9 bg-black rounded-lg flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
               <span className="text-white font-serif text-xl">S</span>
             </div>
-            <h1 className="text-xl font-serif font-bold tracking-tight">StyleSense</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-serif font-bold tracking-tight leading-none">StyleSense</h1>
+              <span className="text-[8px] font-black tracking-widest uppercase text-gray-400 mt-1 flex items-center gap-1">
+                <span className={`w-1 h-1 rounded-full ${apiStatus === 'active' ? 'bg-green-500' : apiStatus === 'demo' ? 'bg-amber-500' : 'bg-red-500'}`}></span>
+                {apiStatus} Mode
+              </span>
+            </div>
           </div>
           <nav className="hidden md:flex gap-10 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
             <button onClick={() => setActiveTab('stylist')} className={activeTab === 'stylist' ? 'text-black border-b border-black' : 'hover:text-black transition-colors'}>Stylist</button>
@@ -361,6 +386,11 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
+      
+      {/* Footer Info */}
+      <footer className="max-w-6xl mx-auto px-6 py-20 text-center border-t border-gray-100">
+        <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Powered by StyleSense Intelligence & Gemini API</p>
+      </footer>
     </div>
   );
 };
