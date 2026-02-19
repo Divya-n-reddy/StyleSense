@@ -1,16 +1,2 @@
-
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
-
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// This file is deprecated in favor of index.js to support pure Vanilla JS/HTML/CSS.
+// If you see this, please ensure your environment is configured to use index.js.

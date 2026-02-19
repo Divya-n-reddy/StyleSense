@@ -1,6 +1,6 @@
 {
   "name": "StyleSense AI",
-  "description": "A lightweight Generative AI-powered fashion recommendation system that provides personalized outfit suggestions and styling tips based on your preferences and wardrobe items.",
+  "description": "A high-end Generative AI fashion recommendation system using Gemini to analyze styles and generate editorial-quality visuals.",
   "requestFramePermissions": [
     "camera"
   ]

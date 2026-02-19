@@ -6,7 +6,7 @@ import { Button } from './components/Button';
 import { OutfitCard } from './components/OutfitCard';
 
 type Tab = 'stylist' | 'wardrobe' | 'trends' | 'lab';
-type ApiStatus = 'loading' | 'active' | 'demo' | 'invalid';
+type ApiStatus = 'ready' | 'loading' | 'error';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('stylist');
@@ -17,7 +17,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StyleAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [apiStatus, setApiStatus] = useState<ApiStatus>('loading');
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState<ApiStatus>('ready');
   
   const [userPalette, setUserPalette] = useState<PersonalColor | null>(null);
   const [loadingLab, setLoadingLab] = useState(false);
@@ -36,26 +37,20 @@ const App: React.FC = () => {
     
     const storedPalette = localStorage.getItem('stylesense_palette');
     if (storedPalette) setUserPalette(JSON.parse(storedPalette));
-
-    // Check for API Key presence
-    const key = process.env.API_KEY;
-    if (key && key !== "undefined" && key !== "null" && key.trim() !== "") {
-      setApiStatus('active');
-    } else {
-      setApiStatus('demo');
-    }
   }, []);
 
   const parseError = (e: any): string => {
-    const msg = e?.message || "";
-    if (msg.includes("401") || msg.includes("API_KEY_INVALID")) {
-      setApiStatus('invalid');
-      return "The API Key provided in Vercel is invalid or expired.";
-    }
+    const msg = e?.message || e?.toString() || "";
     if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
-      return "Rate limit exceeded. Gemini is busy, please wait 60 seconds.";
+      return "Rate limit reached. Please wait a minute or try again later.";
     }
-    return msg || "An unexpected connection error occurred.";
+    if (msg.includes("safety") || msg.includes("safety filters")) {
+      return "The AI blocked this request for safety reasons. Try a simpler prompt.";
+    }
+    if (msg.includes("region") || msg.includes("location")) {
+      return "Image generation is currently not available in your region.";
+    }
+    return "Something went wrong. Please check your internet connection.";
   };
 
   const fetchTrends = async () => {
@@ -64,20 +59,17 @@ const App: React.FC = () => {
     try {
       const data = await getSeasonalTrends();
       setTrends(data);
-      if (apiStatus === 'active') {
-        for (let i = 0; i < data.length; i++) {
-          try {
-            const url = await generateFashionImage(data[i].title, 'moodboard');
-            if (url) {
-              setTrends(prev => {
-                const updated = [...prev];
-                updated[i] = { ...updated[i], trendImageUrl: url };
-                return updated;
-              });
-            }
-            await new Promise(r => setTimeout(r, 1500));
-          } catch (err) {}
-        }
+      for (let i = 0; i < data.length; i++) {
+        try {
+          const url = await generateFashionImage(data[i].title, 'moodboard');
+          if (url) {
+            setTrends(prev => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], trendImageUrl: url };
+              return updated;
+            });
+          }
+        } catch (err) {}
       }
     } catch (e: any) { 
       setError(`Trends failed: ${parseError(e)}`);
@@ -113,6 +105,7 @@ const App: React.FC = () => {
     if (loading) return;
     setLoading(true);
     setError(null);
+    setImageError(null);
     setResult(null);
 
     try {
@@ -121,22 +114,25 @@ const App: React.FC = () => {
       setResult(data);
       setLoading(false);
 
-      if (apiStatus === 'active') {
-        for (let i = 0; i < data.recommendations.length; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          try {
-            const outfit = data.recommendations[i];
-            const url = await generateFashionImage(`${outfit.name}: ${outfit.description}`);
-            if (url) {
-              setResult(prev => {
-                if (!prev) return null;
-                const recs = [...prev.recommendations];
-                recs[i] = { ...recs[i], imageUrl: url };
-                return { ...prev, recommendations: recs };
-              });
-            }
-          } catch (imgError: any) {}
+      // Generate images one by one
+      for (let i = 0; i < data.recommendations.length; i++) {
+        try {
+          const outfit = data.recommendations[i];
+          const url = await generateFashionImage(`${outfit.name}: ${outfit.description}`);
+          if (url) {
+            setResult(prev => {
+              if (!prev) return null;
+              const recs = [...prev.recommendations];
+              recs[i] = { ...recs[i], imageUrl: url };
+              return { ...prev, recommendations: recs };
+            });
+          }
+        } catch (imgError: any) {
+          console.warn("Image generation failed for item", i, imgError);
+          setImageError("Image generation failed. This could be due to regional restrictions or safety filters.");
         }
+        // Small delay to prevent hitting free rate limits too quickly
+        await new Promise(r => setTimeout(r, 1000));
       }
     } catch (e: any) { 
       setError(`Stylist error: ${parseError(e)}`);
@@ -158,27 +154,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20 selection:bg-amber-100 luxury-gradient">
-      {/* Dynamic Status Banner */}
-      {apiStatus === 'demo' && (
-        <div className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm">
-          🏗️ StyleSense Demo Mode (No API Key Detected)
-        </div>
-      )}
-      {apiStatus === 'invalid' && (
-        <div className="bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm">
-          ⚠️ Invalid API Key in Vercel Settings
-        </div>
-      )}
-      {apiStatus === 'active' && (
-        <div className="bg-green-600 text-white text-[10px] font-black uppercase tracking-[0.3em] py-2 text-center sticky top-0 z-[110] shadow-sm animate-pulse">
-          ✨ StyleSense AI Connected & Active
+      {imageError && (
+        <div className="bg-amber-100 text-amber-900 text-[10px] font-bold uppercase tracking-widest py-2 text-center border-b border-amber-200 sticky top-0 z-[105]">
+          ⚠️ {imageError}
         </div>
       )}
 
       {error && (
-        <div className="bg-black text-white text-center py-4 px-6 text-xs font-bold sticky top-0 z-[100] flex items-center justify-between gap-4 shadow-2xl animate-in slide-in-from-top duration-500">
+        <div className="bg-red-600 text-white text-center py-4 px-6 text-xs font-bold sticky top-0 z-[100] flex items-center justify-between gap-4 shadow-2xl">
           <div className="flex items-center gap-3">
-            <span className="bg-red-500 w-2 h-2 rounded-full"></span>
             <span className="flex-1 text-left">{error}</span>
           </div>
           <button onClick={() => setError(null)} className="hover:opacity-50 transition-opacity">CLOSE</button>
@@ -192,11 +176,8 @@ const App: React.FC = () => {
               <span className="text-white font-serif text-xl">S</span>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-serif font-bold tracking-tight leading-none">StyleSense</h1>
-              <span className="text-[8px] font-black tracking-widest uppercase text-gray-400 mt-1 flex items-center gap-1">
-                <span className={`w-1 h-1 rounded-full ${apiStatus === 'active' ? 'bg-green-500' : apiStatus === 'demo' ? 'bg-amber-500' : 'bg-red-500'}`}></span>
-                {apiStatus} Mode
-              </span>
+              <h1 className="text-xl font-serif font-bold tracking-tight leading-none text-gray-900">StyleSense</h1>
+              <span className="text-[8px] font-black tracking-widest uppercase text-gray-400 mt-1">AI Personal Stylist</span>
             </div>
           </div>
           <nav className="hidden md:flex gap-10 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
@@ -212,7 +193,7 @@ const App: React.FC = () => {
         {activeTab === 'lab' && (
           <div className="max-w-4xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="text-center space-y-4">
-              <h2 className="text-5xl font-serif font-bold italic">The Palette Lab</h2>
+              <h2 className="text-5xl font-serif font-bold italic text-gray-900">The Palette Lab</h2>
               <p className="text-gray-400 text-sm tracking-widest uppercase">Personal Color Analysis</p>
             </div>
 
@@ -277,7 +258,7 @@ const App: React.FC = () => {
                 <div className="space-y-8">
                   <div className="space-y-3">
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-700">Style Intelligence</p>
-                    <h2 className="text-6xl lg:text-8xl font-serif font-semibold leading-[0.9]">Style<br />Your <span className="text-amber-600 italic">Way</span>.</h2>
+                    <h2 className="text-6xl lg:text-8xl font-serif font-semibold leading-[0.9] text-gray-900">Style<br />Your <span className="text-amber-600 italic">Way</span>.</h2>
                   </div>
                   <p className="text-gray-500 max-w-sm leading-relaxed text-sm">Experience personalized AI styling designed to elevate your everyday looks.</p>
                   <div className="bg-white/40 p-10 rounded-[2.5rem] shadow-xl border border-white/60 space-y-8 mt-12 backdrop-blur-sm">
@@ -311,7 +292,7 @@ const App: React.FC = () => {
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center p-16 text-center space-y-6">
                       <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-4xl shadow-md">👗</div>
-                      <p className="font-bold text-sm tracking-tight">Add a piece from your closet</p>
+                      <p className="font-bold text-sm tracking-tight text-gray-900">Add a piece from your closet</p>
                     </div>
                   )}
                   <input type="file" ref={fileInputRef} onChange={(e) => {
@@ -329,7 +310,7 @@ const App: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-gray-100 pb-10">
                   <div className="space-y-4">
                     <button onClick={() => setResult(null)} className="text-[10px] font-black text-gray-400 hover:text-black mb-4 uppercase tracking-[0.2em]">← New Search</button>
-                    <h2 className="text-5xl font-serif font-bold italic">The Edit</h2>
+                    <h2 className="text-5xl font-serif font-bold italic text-gray-900">The Edit</h2>
                     <p className="text-gray-500 text-sm max-w-2xl leading-loose">{result.vibeSummary}</p>
                   </div>
                 </div>
@@ -346,7 +327,7 @@ const App: React.FC = () => {
         {activeTab === 'wardrobe' && (
           <div className="space-y-16 animate-in fade-in slide-in-from-bottom-6 duration-700">
              <div className="text-center space-y-4">
-                <h2 className="text-5xl font-serif font-bold italic">Lookbook</h2>
+                <h2 className="text-5xl font-serif font-bold italic text-gray-900">Lookbook</h2>
                 <p className="text-gray-400 text-[10px] uppercase tracking-[0.3em]">Your Saved Style</p>
              </div>
              {savedOutfits.length === 0 ? (
@@ -366,7 +347,7 @@ const App: React.FC = () => {
         {activeTab === 'trends' && (
           <div className="space-y-16 animate-in fade-in slide-in-from-bottom-6 duration-700">
              <div className="text-center space-y-4">
-                <h2 className="text-5xl font-serif font-bold italic">Trends</h2>
+                <h2 className="text-5xl font-serif font-bold italic text-gray-900">Trends</h2>
                 <p className="text-gray-400 text-[10px] uppercase tracking-[0.3em]">Global Style Pulse</p>
              </div>
              {trends.length === 0 && !loadingTrends && (
@@ -377,6 +358,7 @@ const App: React.FC = () => {
              <div className="grid lg:grid-cols-2 gap-10">
                {trends.map((trend, i) => (
                  <div key={i} className="bg-white/60 backdrop-blur-sm rounded-[2.5rem] overflow-hidden group border border-white shadow-xl p-10 space-y-4">
+                    {trend.trendImageUrl && <img src={trend.trendImageUrl} className="w-full h-48 object-cover rounded-2xl mb-4" />}
                     <div className="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-3 py-1 rounded-full w-fit">{trend.context}</div>
                     <h3 className="text-3xl font-serif font-bold text-gray-900">{trend.title}</h3>
                     <p className="text-gray-500 text-sm leading-relaxed">{trend.description}</p>
@@ -387,9 +369,8 @@ const App: React.FC = () => {
         )}
       </main>
       
-      {/* Footer Info */}
       <footer className="max-w-6xl mx-auto px-6 py-20 text-center border-t border-gray-100">
-        <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Powered by StyleSense Intelligence & Gemini API</p>
+        <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em]">Powered by StyleSense & Gemini AI</p>
       </footer>
     </div>
   );
