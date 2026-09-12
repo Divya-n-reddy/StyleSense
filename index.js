@@ -77,20 +77,17 @@ const getRecommendations = async (occasion, budget, vibe, base64Image) => {
 };
 
 const visualizeLook = async (name, description) => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: { 
-      parts: [{ 
-        text: `High-end editorial fashion photography, full length shot. A luxury ${name}: ${description}. Model with effortless elegance. Neutral, minimalist studio lighting, 8k resolution, cinematic composition.` 
-      }] 
-    },
-    config: { 
-      imageConfig: { 
-        aspectRatio: "3:4" 
-      } 
+    try {
+        const prompt = `High-end editorial fashion photography, full length shot. A luxury ${name}: ${description}. Professional fashion model, realistic clothing details, studio lighting, clean background, premium fashion magazine style.`;
+
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=768&height=1024&nologo=true`;
+
+        return imageUrl;
+    } catch (error) {
+        console.error("Image generation failed:", error);
+        return null;
     }
-  });
+};
   const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
   return part ? `data:image/png;base64,${part.inlineData.data}` : null;
 };
