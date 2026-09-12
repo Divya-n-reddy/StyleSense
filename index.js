@@ -46,7 +46,7 @@ const getRecommendations = async (occasion, budget, vibe, base64Image) => {
   2. vibeSummary: a brief editorial paragraph describing the overall aesthetic direction.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.8-flash',
     contents: base64Image 
       ? { parts: [{ inlineData: { data: base64Image, mimeType: 'image/jpeg' } }, { text: prompt }] }
       : { parts: [{ text: prompt }] },
